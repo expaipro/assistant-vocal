@@ -21,6 +21,19 @@ The owner is not a developer: explain changes in plain, simple language (in Fren
 - **No AI API is connected yet** (no Anthropic key). The assistant's replies are fake, canned butler-style answers,
   now generated **server-side** by the Supabase Edge Function `assistant`.
 - The mic button is visual only (no speech recognition yet).
+- **The assistant reads every reply aloud** (text-to-speech via `expo-speech`, built-in iOS voices).
+
+# Voice (text-to-speech)
+
+- All speech goes through `src/services/voice.ts` (`speak`, `stopSpeaking`, `setVoiceEnabled`); screens read its state with
+  `useVoice()` (`src/hooks/use-voice.ts`). To move to a premium voice later, change only `voice.ts`.
+- Voice choice: first calm English male voice found on the phone (Daniel, Arthur, Oliver, Aaron...), enhanced/premium
+  quality preferred; otherwise the default `en-GB` voice. Rate 0.9, pitch 0.95.
+- Sending a new message (or tapping the mic) stops the current speech.
+- Mute button (top right) is remembered between launches with AsyncStorage (key `voice.enabled`).
+- While speaking, the mic ring switches to a fast back-and-forth "vibration" with a waveform icon (`MicButton` mode `speaking`),
+  distinct from the outward pulse of `listening`.
+- iOS: no sound when the phone's silent mode is on (expected `expo-speech` behaviour).
 
 # Architecture
 
@@ -54,6 +67,8 @@ Screen (src/app/index.tsx)
 - `src/app/` — screens (Expo Router). Currently a single conversation screen: `index.tsx`.
 - `src/components/` — reusable components (`mic-button.tsx`, `message-bubble.tsx`, `thinking-indicator.tsx`).
 - `src/services/assistant.ts` — the app-side entry point to the assistant.
+- `src/services/voice.ts` — the assistant's spoken voice (text-to-speech).
+- `src/hooks/use-voice.ts` — React hook exposing the voice state (muted, speaking).
 - `src/lib/supabase.ts` — Supabase client (no user sessions yet).
 - `src/constants/theme.ts` — HUD colors and spacing.
 - `supabase/` — Supabase project config (`config.toml`) and Edge Functions (`functions/assistant/`).

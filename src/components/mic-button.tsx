@@ -13,45 +13,69 @@ import Animated, {
 
 import { Colors } from '@/constants/theme';
 
+export type MicMode = 'idle' | 'listening' | 'speaking';
+
 const IDLE_PULSE_MS = 2600;
 const LISTENING_PULSE_MS = 900;
+const SPEAKING_PULSE_MS = 420;
 
 type Props = {
-  listening: boolean;
+  mode: MicMode;
   onPress: () => void;
   size?: number;
 };
 
-export function MicButton({ listening, onPress, size = 64 }: Props) {
+export function MicButton({ mode, onPress, size = 64 }: Props) {
   const pulse = useSharedValue(0);
+  // 1 while speaking: rings "vibrate" back and forth instead of expanding outward.
+  const speaking = useSharedValue(0);
   const ringSize = size + 16;
 
-  // Restart the looping pulse whenever the state changes, faster while listening.
+  // Restart the looping animation whenever the mode changes.
   useEffect(() => {
+    const isSpeaking = mode === 'speaking';
+    speaking.value = isSpeaking ? 1 : 0;
     pulse.value = 0;
+    const duration =
+      mode === 'speaking' ? SPEAKING_PULSE_MS : mode === 'listening' ? LISTENING_PULSE_MS : IDLE_PULSE_MS;
     pulse.value = withRepeat(
       withTiming(1, {
-        duration: listening ? LISTENING_PULSE_MS : IDLE_PULSE_MS,
-        easing: Easing.out(Easing.quad),
+        duration,
+        easing: isSpeaking ? Easing.inOut(Easing.sin) : Easing.out(Easing.quad),
       }),
       -1,
-      false,
+      isSpeaking,
     );
     return () => cancelAnimation(pulse);
-  }, [listening, pulse]);
+  }, [mode, pulse, speaking]);
 
-  const outerRingStyle = useAnimatedStyle(() => ({
-    opacity: interpolate(pulse.value, [0, 1], [0.7, 0]),
-    transform: [{ scale: interpolate(pulse.value, [0, 1], [1, 1.35]) }],
-  }));
+  const outerRingStyle = useAnimatedStyle(() =>
+    speaking.value
+      ? {
+          opacity: interpolate(pulse.value, [0, 1], [0.35, 0.9]),
+          transform: [{ scale: interpolate(pulse.value, [0, 1], [1.02, 1.2]) }],
+        }
+      : {
+          opacity: interpolate(pulse.value, [0, 1], [0.7, 0]),
+          transform: [{ scale: interpolate(pulse.value, [0, 1], [1, 1.35]) }],
+        },
+  );
 
-  const innerRingStyle = useAnimatedStyle(() => ({
-    opacity: interpolate(pulse.value, [0, 0.5, 1], [0.5, 1, 0.5]),
-    transform: [{ scale: interpolate(pulse.value, [0, 0.5, 1], [1, 1.04, 1]) }],
-  }));
+  const innerRingStyle = useAnimatedStyle(() =>
+    speaking.value
+      ? {
+          opacity: 1,
+          transform: [{ scale: interpolate(pulse.value, [0, 1], [1.06, 0.98]) }],
+        }
+      : {
+          opacity: interpolate(pulse.value, [0, 0.5, 1], [0.5, 1, 0.5]),
+          transform: [{ scale: interpolate(pulse.value, [0, 0.5, 1], [1, 1.04, 1]) }],
+        },
+  );
 
   const ringShape = { width: ringSize, height: ringSize, borderRadius: ringSize / 2 };
   const buttonShape = { width: size, height: size, borderRadius: size / 2 };
+  const listening = mode === 'listening';
 
   return (
     <View style={[styles.ringArea, ringShape]}>
@@ -65,10 +89,15 @@ export function MicButton({ listening, onPress, size = 64 }: Props) {
           styles.button,
           buttonShape,
           listening && styles.buttonActive,
+          mode === 'speaking' && styles.buttonSpeaking,
           pressed && styles.buttonPressed,
         ]}>
         <SymbolView
-          name={{ ios: 'mic.fill', android: 'mic', web: 'mic' }}
+          name={
+            mode === 'speaking'
+              ? { ios: 'waveform', android: 'graphic_eq', web: 'graphic_eq' }
+              : { ios: 'mic.fill', android: 'mic', web: 'mic' }
+          }
           tintColor={listening ? Colors.background : Colors.cyan}
           size={size * 0.4}
         />
@@ -110,6 +139,11 @@ const styles = StyleSheet.create({
     borderColor: Colors.cyan,
     shadowOpacity: 1,
     shadowRadius: 24,
+  },
+  buttonSpeaking: {
+    borderColor: Colors.cyan,
+    shadowOpacity: 0.9,
+    shadowRadius: 22,
   },
   buttonPressed: {
     transform: [{ scale: 0.94 }],

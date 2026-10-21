@@ -17,7 +17,9 @@ import { MessageBubble } from '@/components/message-bubble';
 import { MicButton } from '@/components/mic-button';
 import { ThinkingIndicator } from '@/components/thinking-indicator';
 import { Colors, Spacing } from '@/constants/theme';
+import { useVoice } from '@/hooks/use-voice';
 import { askAssistant, type ChatMessage } from '@/services/assistant';
+import { setVoiceEnabled, speak, stopSpeaking } from '@/services/voice';
 
 let nextId = 0;
 function makeMessage(role: ChatMessage['role'], text: string): ChatMessage {
@@ -33,6 +35,7 @@ export default function ConversationScreen() {
   const [thinking, setThinking] = useState(false);
   const [listening, setListening] = useState(false);
   const [keyboardVisible, setKeyboardVisible] = useState(false);
+  const voice = useVoice();
 
   // The home-indicator gap is only needed when the keyboard is closed.
   useEffect(() => {
@@ -52,6 +55,7 @@ export default function ConversationScreen() {
     const text = draft.trim();
     if (!text || thinking) return;
 
+    stopSpeaking();
     const userMessage = makeMessage('user', text);
     const history = [...messages, userMessage];
     setMessages(history);
@@ -61,11 +65,11 @@ export default function ConversationScreen() {
     try {
       const reply = await askAssistant(text, history);
       setMessages((current) => [...current, makeMessage('assistant', reply)]);
+      void speak(reply);
     } catch {
-      setMessages((current) => [
-        ...current,
-        makeMessage('assistant', "I'm terribly sorry, something went wrong. Please try again."),
-      ]);
+      const apology = "I'm terribly sorry, something went wrong. Please try again.";
+      setMessages((current) => [...current, makeMessage('assistant', apology)]);
+      void speak(apology);
     } finally {
       setThinking(false);
     }
@@ -79,6 +83,22 @@ export default function ConversationScreen() {
         style={styles.flex}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <View style={styles.header}>
+          <Pressable
+            onPress={() => setVoiceEnabled(!voice.enabled)}
+            accessibilityRole="button"
+            accessibilityLabel={voice.enabled ? 'Mute voice' : 'Unmute voice'}
+            hitSlop={12}
+            style={({ pressed }) => [styles.voiceToggle, pressed && styles.voiceTogglePressed]}>
+            <SymbolView
+              name={
+                voice.enabled
+                  ? { ios: 'speaker.wave.2.fill', android: 'volume_up', web: 'volume_up' }
+                  : { ios: 'speaker.slash.fill', android: 'volume_off', web: 'volume_off' }
+              }
+              tintColor={voice.enabled ? Colors.cyan : Colors.textMuted}
+              size={20}
+            />
+          </Pressable>
           <Text style={styles.title}>ASSISTANT</Text>
           <View style={styles.status}>
             <View style={styles.statusDot} />
@@ -142,7 +162,13 @@ export default function ConversationScreen() {
           </View>
 
           <View style={styles.micRow}>
-            <MicButton listening={listening} onPress={() => setListening((value) => !value)} />
+            <MicButton
+              mode={voice.speaking ? 'speaking' : listening ? 'listening' : 'idle'}
+              onPress={() => {
+                stopSpeaking();
+                setListening((value) => !value);
+              }}
+            />
           </View>
         </View>
       </KeyboardAvoidingView>
@@ -165,6 +191,23 @@ const styles = StyleSheet.create({
     gap: Spacing.sm,
     borderBottomWidth: 1,
     borderBottomColor: Colors.cyanFaint,
+  },
+  voiceToggle: {
+    position: 'absolute',
+    right: Spacing.md,
+    top: Spacing.md,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: Colors.cyanFaint,
+    backgroundColor: Colors.surface,
+    zIndex: 1,
+  },
+  voiceTogglePressed: {
+    transform: [{ scale: 0.92 }],
   },
   title: {
     color: Colors.cyan,
