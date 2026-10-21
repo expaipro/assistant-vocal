@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="referrer" content="no-referrer">
+  <meta name="robots" content="noindex">
+  <title>Assistant — Email confirmation</title>
+  <style>
+    :root {
+      --bg: #03070C;
+      --surface: #07111A;
+      --cyan: #22E4FF;
+      --cyan-dim: rgba(34, 228, 255, 0.35);
+      --cyan-faint: rgba(34, 228, 255, 0.12);
+      --text: #D8F7FF;
+      --muted: #5E8A99;
+      --error: #FF6B81;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; height: 100%; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px 16px;
+    }
+    main {
+      width: 100%;
+      max-width: 420px;
+      text-align: center;
+    }
+    .title {
+      color: var(--cyan);
+      font-size: 28px;
+      font-weight: 300;
+      letter-spacing: 12px;
+      margin: 0 0 32px;
+      text-shadow: 0 0 14px var(--cyan);
+    }
+    .panel {
+      padding: 28px 24px;
+      border-radius: 16px;
+      border: 1px solid var(--cyan-dim);
+      background: var(--cyan-faint);
+    }
+    .ring {
+      width: 72px;
+      height: 72px;
+      margin: 0 auto 20px;
+      border-radius: 50%;
+      border: 2px solid var(--cyan);
+      box-shadow: 0 0 18px var(--cyan);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 34px;
+      color: var(--cyan);
+    }
+    .error .ring { border-color: var(--error); box-shadow: 0 0 18px var(--error); color: var(--error); }
+    h1 { font-size: 20px; margin: 0 0 12px; letter-spacing: 0.5px; }
+    p { color: var(--muted); font-size: 15px; line-height: 1.5; margin: 0; }
+  </style>
+</head>
+<body>
+  <main>
+    <p class="title">ASSISTANT</p>
+    <div class="panel" id="panel">
+      <div class="ring" id="icon">&#10003;</div>
+      <h1 id="heading"></h1>
+      <p id="message"></p>
+    </div>
+  </main>
+  <script>
+    (function () {
+      var texts = {
+        en: {
+          okTitle: 'Email confirmed',
+          okMessage: 'Your email address has been confirmed. You can now return to the app and sign in.',
+          errorTitle: 'Link invalid or expired',
+          errorMessage: 'This confirmation link no longer works. Return to the app and sign in: if your email is not confirmed yet, create your account again to receive a new link.'
+        },
+        fr: {
+          okTitle: 'E-mail confirmé',
+          okMessage: "Votre adresse e-mail est confirmée. Vous pouvez revenir dans l'application et vous connecter.",
+          errorTitle: 'Lien invalide ou expiré',
+          errorMessage: "Ce lien de confirmation ne fonctionne plus. Revenez dans l'application et connectez-vous : si votre e-mail n'est pas encore confirmé, recréez votre compte pour recevoir un nouveau lien."
+        }
+      };
+      var language = (navigator.language || 'en').toLowerCase().indexOf('fr') === 0 ? 'fr' : 'en';
+      var t = texts[language];
+      document.documentElement.lang = language;
+
+      // Supabase adds the result after "#" (or "?" for errors). Never keep it in the address bar:
+      // on success it contains a session token we don't use.
+      var params = new URLSearchParams(window.location.hash.slice(1) + '&' + window.location.search.slice(1));
+      var failed = params.has('error') || params.has('error_code');
+      if (window.location.hash || window.location.search) {
+        history.replaceState(null, '', window.location.pathname);
+      }
+
+      document.getElementById('heading').textContent = failed ? t.errorTitle : t.okTitle;
+      document.getElementById('message').textContent = failed ? t.errorMessage : t.okMessage;
+      document.title = 'Assistant — ' + (failed ? t.errorTitle : t.okTitle);
+      if (failed) {
+        document.getElementById('panel').className = 'panel error';
+        document.getElementById('icon').innerHTML = '&#33;';
+      }
+    })();
+  </script>
+</body>
+</html>
