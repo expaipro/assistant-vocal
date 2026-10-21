@@ -7,6 +7,7 @@ export const Colors = {
   text: '#D8F7FF',
   textMuted: '#5E8A99',
   online: '#3CFFB0',
+  userBubble: '#0A5F73',
 } as const;
 
 export const Spacing = {

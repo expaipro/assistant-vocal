@@ -1,35 +1,151 @@
-import { useState } from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SymbolView } from 'expo-symbols';
+import { useEffect, useRef, useState } from 'react';
+import {
+  FlatList,
+  Keyboard,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { MessageBubble } from '@/components/message-bubble';
 import { MicButton } from '@/components/mic-button';
+import { ThinkingIndicator } from '@/components/thinking-indicator';
 import { Colors, Spacing } from '@/constants/theme';
+import { askAssistant, type ChatMessage } from '@/services/assistant';
 
-export default function HomeScreen() {
+let nextId = 0;
+function makeMessage(role: ChatMessage['role'], text: string): ChatMessage {
+  nextId += 1;
+  return { id: `${Date.now()}-${nextId}`, role, text };
+}
+
+export default function ConversationScreen() {
+  const insets = useSafeAreaInsets();
+  const listRef = useRef<FlatList<ChatMessage>>(null);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [draft, setDraft] = useState('');
+  const [thinking, setThinking] = useState(false);
   const [listening, setListening] = useState(false);
-  // Assistant replies will be written here once voice recognition is wired up.
-  const [response] = useState('');
+  const [keyboardVisible, setKeyboardVisible] = useState(false);
+
+  // The home-indicator gap is only needed when the keyboard is closed.
+  useEffect(() => {
+    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+    const showSub = Keyboard.addListener(showEvent, () => setKeyboardVisible(true));
+    const hideSub = Keyboard.addListener(hideEvent, () => setKeyboardVisible(false));
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, []);
+
+  const scrollToEnd = () => listRef.current?.scrollToEnd({ animated: true });
+
+  async function send() {
+    const text = draft.trim();
+    if (!text || thinking) return;
+
+    const userMessage = makeMessage('user', text);
+    const history = [...messages, userMessage];
+    setMessages(history);
+    setDraft('');
+    setThinking(true);
+
+    try {
+      const reply = await askAssistant(text, history);
+      setMessages((current) => [...current, makeMessage('assistant', reply)]);
+    } catch {
+      setMessages((current) => [
+        ...current,
+        makeMessage('assistant', "I'm terribly sorry, something went wrong. Please try again."),
+      ]);
+    } finally {
+      setThinking(false);
+    }
+  }
+
+  const canSend = draft.trim().length > 0 && !thinking;
 
   return (
-    <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.title}>ASSISTANT</Text>
-        <View style={styles.status}>
-          <View style={styles.statusDot} />
-          <Text style={styles.statusText}>Online</Text>
+    <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
+      <KeyboardAvoidingView
+        style={styles.flex}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <View style={styles.header}>
+          <Text style={styles.title}>ASSISTANT</Text>
+          <View style={styles.status}>
+            <View style={styles.statusDot} />
+            <Text style={styles.statusText}>Online</Text>
+          </View>
         </View>
-      </View>
 
-      <View style={styles.center}>
-        <MicButton listening={listening} onPress={() => setListening((value) => !value)} />
-      </View>
+        <FlatList
+          ref={listRef}
+          style={styles.flex}
+          data={messages}
+          keyExtractor={(item) => item.id}
+          renderItem={({ item }) => <MessageBubble message={item} />}
+          contentContainerStyle={styles.listContent}
+          keyboardDismissMode="interactive"
+          keyboardShouldPersistTaps="handled"
+          onContentSizeChange={scrollToEnd}
+          onLayout={scrollToEnd}
+          ListEmptyComponent={
+            <Text style={styles.emptyText}>Good day. How may I be of service?</Text>
+          }
+          ListFooterComponent={thinking ? <ThinkingIndicator /> : null}
+          ListFooterComponentStyle={styles.footer}
+        />
 
-      <View style={styles.responsePanel}>
-        <Text style={styles.panelLabel}>RESPONSE</Text>
-        <ScrollView contentContainerStyle={styles.responseContent}>
-          <Text style={styles.responseText}>{response}</Text>
-        </ScrollView>
-      </View>
+        <View
+          style={[
+            styles.bottomBar,
+            { paddingBottom: keyboardVisible ? Spacing.sm : insets.bottom + Spacing.sm },
+          ]}>
+          <View style={styles.inputRow}>
+            <TextInput
+              style={styles.input}
+              value={draft}
+              onChangeText={setDraft}
+              placeholder={listening ? 'Listening...' : 'Type a message'}
+              placeholderTextColor={listening ? Colors.cyan : Colors.textMuted}
+              selectionColor={Colors.cyan}
+              keyboardAppearance="dark"
+              returnKeyType="send"
+              onSubmitEditing={send}
+              submitBehavior="submit"
+              multiline
+            />
+            <Pressable
+              onPress={send}
+              disabled={!canSend}
+              accessibilityRole="button"
+              accessibilityLabel="Send message"
+              style={({ pressed }) => [
+                styles.sendButton,
+                !canSend && styles.sendButtonDisabled,
+                pressed && styles.sendButtonPressed,
+              ]}>
+              <SymbolView
+                name={{ ios: 'arrow.up', android: 'arrow_upward', web: 'arrow_upward' }}
+                tintColor={canSend ? Colors.background : Colors.textMuted}
+                size={20}
+              />
+            </Pressable>
+          </View>
+
+          <View style={styles.micRow}>
+            <MicButton listening={listening} onPress={() => setListening((value) => !value)} />
+          </View>
+        </View>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
@@ -38,12 +154,17 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: Colors.background,
-    paddingHorizontal: Spacing.lg,
+  },
+  flex: {
+    flex: 1,
   },
   header: {
     alignItems: 'center',
     paddingTop: Spacing.md,
+    paddingBottom: Spacing.md,
     gap: Spacing.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.cyanFaint,
   },
   title: {
     color: Colors.cyan,
@@ -73,32 +194,65 @@ const styles = StyleSheet.create({
     fontSize: 13,
     letterSpacing: 2,
   },
-  center: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  responsePanel: {
-    height: 160,
-    marginBottom: Spacing.md,
+  listContent: {
+    flexGrow: 1,
     padding: Spacing.md,
-    borderRadius: 12,
+    gap: Spacing.md,
+  },
+  emptyText: {
+    color: Colors.textMuted,
+    textAlign: 'center',
+    marginTop: Spacing.xl,
+    fontSize: 15,
+    letterSpacing: 1,
+  },
+  footer: {
+    marginTop: 0,
+  },
+  bottomBar: {
+    paddingHorizontal: Spacing.md,
+    paddingTop: Spacing.sm,
+    gap: Spacing.sm,
+    borderTopWidth: 1,
+    borderTopColor: Colors.cyanFaint,
+  },
+  inputRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    gap: Spacing.sm,
+  },
+  input: {
+    flex: 1,
+    minHeight: 44,
+    maxHeight: 120,
+    paddingHorizontal: Spacing.md,
+    paddingTop: 12,
+    paddingBottom: 12,
+    borderRadius: 22,
     borderWidth: 1,
     borderColor: Colors.cyanDim,
-    backgroundColor: Colors.cyanFaint,
-  },
-  panelLabel: {
-    color: Colors.textMuted,
-    fontSize: 11,
-    letterSpacing: 3,
-    marginBottom: Spacing.sm,
-  },
-  responseContent: {
-    flexGrow: 1,
-  },
-  responseText: {
+    backgroundColor: Colors.surface,
     color: Colors.text,
     fontSize: 16,
-    lineHeight: 24,
+  },
+  sendButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Colors.cyan,
+  },
+  sendButtonDisabled: {
+    backgroundColor: Colors.surface,
+    borderWidth: 1,
+    borderColor: Colors.cyanFaint,
+  },
+  sendButtonPressed: {
+    transform: [{ scale: 0.92 }],
+  },
+  micRow: {
+    alignItems: 'center',
+    paddingVertical: Spacing.sm,
   },
 });

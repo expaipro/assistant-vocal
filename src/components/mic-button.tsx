@@ -1,6 +1,6 @@
 import { SymbolView } from 'expo-symbols';
 import { useEffect } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 import Animated, {
   Easing,
   cancelAnimation,
@@ -13,18 +13,18 @@ import Animated, {
 
 import { Colors } from '@/constants/theme';
 
-const BUTTON_SIZE = 150;
-const RING_SIZE = BUTTON_SIZE + 40;
 const IDLE_PULSE_MS = 2600;
 const LISTENING_PULSE_MS = 900;
 
 type Props = {
   listening: boolean;
   onPress: () => void;
+  size?: number;
 };
 
-export function MicButton({ listening, onPress }: Props) {
+export function MicButton({ listening, onPress, size = 64 }: Props) {
   const pulse = useSharedValue(0);
+  const ringSize = size + 16;
 
   // Restart the looping pulse whenever the state changes, faster while listening.
   useEffect(() => {
@@ -42,7 +42,7 @@ export function MicButton({ listening, onPress }: Props) {
 
   const outerRingStyle = useAnimatedStyle(() => ({
     opacity: interpolate(pulse.value, [0, 1], [0.7, 0]),
-    transform: [{ scale: interpolate(pulse.value, [0, 1], [1, 1.45]) }],
+    transform: [{ scale: interpolate(pulse.value, [0, 1], [1, 1.35]) }],
   }));
 
   const innerRingStyle = useAnimatedStyle(() => ({
@@ -50,64 +50,51 @@ export function MicButton({ listening, onPress }: Props) {
     transform: [{ scale: interpolate(pulse.value, [0, 0.5, 1], [1, 1.04, 1]) }],
   }));
 
+  const ringShape = { width: ringSize, height: ringSize, borderRadius: ringSize / 2 };
+  const buttonShape = { width: size, height: size, borderRadius: size / 2 };
+
   return (
-    <View style={styles.wrapper}>
-      <View style={styles.ringArea}>
-        <Animated.View style={[styles.ring, styles.outerRing, outerRingStyle]} />
-        <Animated.View style={[styles.ring, innerRingStyle]} />
-        <Pressable
-          onPress={onPress}
-          accessibilityRole="button"
-          accessibilityLabel={listening ? 'Stop listening' : 'Start listening'}
-          style={({ pressed }) => [
-            styles.button,
-            listening && styles.buttonActive,
-            pressed && styles.buttonPressed,
-          ]}>
-          <SymbolView
-            name={{ ios: 'mic.fill', android: 'mic', web: 'mic' }}
-            tintColor={listening ? Colors.background : Colors.cyan}
-            size={56}
-          />
-        </Pressable>
-      </View>
-      <Text style={[styles.label, listening && styles.labelActive]}>
-        {listening ? 'Listening...' : 'Tap to speak'}
-      </Text>
+    <View style={[styles.ringArea, ringShape]}>
+      <Animated.View style={[styles.ring, ringShape, styles.outerRing, outerRingStyle]} />
+      <Animated.View style={[styles.ring, ringShape, innerRingStyle]} />
+      <Pressable
+        onPress={onPress}
+        accessibilityRole="button"
+        accessibilityLabel={listening ? 'Stop listening' : 'Start listening'}
+        style={({ pressed }) => [
+          styles.button,
+          buttonShape,
+          listening && styles.buttonActive,
+          pressed && styles.buttonPressed,
+        ]}>
+        <SymbolView
+          name={{ ios: 'mic.fill', android: 'mic', web: 'mic' }}
+          tintColor={listening ? Colors.background : Colors.cyan}
+          size={size * 0.4}
+        />
+      </Pressable>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  wrapper: {
-    alignItems: 'center',
-    gap: 36,
-  },
   ringArea: {
-    width: RING_SIZE * 1.5,
-    height: RING_SIZE * 1.5,
     alignItems: 'center',
     justifyContent: 'center',
   },
   ring: {
     position: 'absolute',
-    width: RING_SIZE,
-    height: RING_SIZE,
-    borderRadius: RING_SIZE / 2,
     borderWidth: 2,
     borderColor: Colors.cyan,
     shadowColor: Colors.cyan,
     shadowOpacity: 0.9,
-    shadowRadius: 16,
+    shadowRadius: 12,
     shadowOffset: { width: 0, height: 0 },
   },
   outerRing: {
     borderWidth: 1,
   },
   button: {
-    width: BUTTON_SIZE,
-    height: BUTTON_SIZE,
-    borderRadius: BUTTON_SIZE / 2,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: Colors.surface,
@@ -115,25 +102,16 @@ const styles = StyleSheet.create({
     borderColor: Colors.cyanDim,
     shadowColor: Colors.cyan,
     shadowOpacity: 0.5,
-    shadowRadius: 24,
+    shadowRadius: 16,
     shadowOffset: { width: 0, height: 0 },
   },
   buttonActive: {
     backgroundColor: Colors.cyan,
     borderColor: Colors.cyan,
     shadowOpacity: 1,
-    shadowRadius: 36,
+    shadowRadius: 24,
   },
   buttonPressed: {
-    transform: [{ scale: 0.96 }],
-  },
-  label: {
-    color: Colors.textMuted,
-    fontSize: 15,
-    letterSpacing: 3,
-    textTransform: 'uppercase',
-  },
-  labelActive: {
-    color: Colors.cyan,
+    transform: [{ scale: 0.94 }],
   },
 });

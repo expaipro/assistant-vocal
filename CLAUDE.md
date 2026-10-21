@@ -16,8 +16,16 @@ The owner is not a developer: explain changes in plain, simple language (in Fren
 - **No Marvel elements**: never use the name "Jarvis" or any Iron Man visuals, names or references.
 - Run `npx expo lint` and `npx tsc --noEmit` before declaring a task done.
 
+# État actuel
+
+- **No AI API is connected yet** (no Anthropic key). The assistant's replies are fake, canned butler-style answers.
+- All assistant logic goes through `askAssistant()` in `src/services/assistant.ts`. Screens must never call an AI directly.
+  Planned: replace that function's body with the real call to Claude **via Supabase** (key kept server-side), without touching the screens.
+- The mic button is visual only (no speech recognition yet).
+
 # Structure
 
-- `src/app/` — screens (Expo Router). Currently a single home screen: `index.tsx`.
-- `src/components/` — reusable components (e.g. `mic-button.tsx`).
+- `src/app/` — screens (Expo Router). Currently a single conversation screen: `index.tsx`.
+- `src/components/` — reusable components (`mic-button.tsx`, `message-bubble.tsx`, `thinking-indicator.tsx`).
+- `src/services/assistant.ts` — the assistant "brain" (currently fake).
 - `src/constants/theme.ts` — HUD colors and spacing.
