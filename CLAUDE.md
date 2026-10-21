@@ -18,14 +18,42 @@ The owner is not a developer: explain changes in plain, simple language (in Fren
 
 # État actuel
 
-- **No AI API is connected yet** (no Anthropic key). The assistant's replies are fake, canned butler-style answers.
-- All assistant logic goes through `askAssistant()` in `src/services/assistant.ts`. Screens must never call an AI directly.
-  Planned: replace that function's body with the real call to Claude **via Supabase** (key kept server-side), without touching the screens.
+- **No AI API is connected yet** (no Anthropic key). The assistant's replies are fake, canned butler-style answers,
+  now generated **server-side** by the Supabase Edge Function `assistant`.
 - The mic button is visual only (no speech recognition yet).
+
+# Architecture
+
+```
+Screen (src/app/index.tsx)
+  -> askAssistant()            src/services/assistant.ts   (only entry point; screens never call the server directly)
+  -> supabase.functions.invoke src/lib/supabase.ts          (sends the publishable key in the `apikey` header)
+  -> Edge Function "assistant" supabase/functions/assistant/index.ts (Deno, runs on Supabase)
+```
+
+- Request body: `{ message: string, history: { role, text }[] }`. Response: `{ reply: string }`, or `{ error }` with a 4xx status.
+- The function uses `withSupabase({ auth: "publishable" })` from `@supabase/server`, so it only accepts calls carrying the
+  project's publishable key; `verify_jwt = false` in `supabase/config.toml` (publishable keys are not JWTs).
+- On failure (no network, server down, 15 s timeout, bad config), `askAssistant` throws and the screen shows a polite error bubble.
+- Next step: replace the fake replies in the Edge Function with the real Claude call. The Anthropic key must be stored as a
+  Supabase secret (`npx supabase secrets set ...`), never in the app or in `.env`.
+
+# Configuration
+
+- `.env` (git-ignored) holds `EXPO_PUBLIC_SUPABASE_URL` and `EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY`. `.env.example` documents them without values.
+- Only public values may use the `EXPO_PUBLIC_` prefix: they are bundled into the app. No secret / service-role key in the app, ever.
+- Supabase CLI is used through `npx supabase ...` (no global install). Docker is not installed, so functions are tested
+  on the hosted project, not locally.
+- Commands that need the owner (login, link, deploy): give the exact command and wait for them to run it.
+  - `npx supabase login`
+  - `npx supabase link --project-ref <project-ref>`
+  - `npx supabase functions deploy assistant`
 
 # Structure
 
 - `src/app/` — screens (Expo Router). Currently a single conversation screen: `index.tsx`.
 - `src/components/` — reusable components (`mic-button.tsx`, `message-bubble.tsx`, `thinking-indicator.tsx`).
-- `src/services/assistant.ts` — the assistant "brain" (currently fake).
+- `src/services/assistant.ts` — the app-side entry point to the assistant.
+- `src/lib/supabase.ts` — Supabase client (no user sessions yet).
 - `src/constants/theme.ts` — HUD colors and spacing.
+- `supabase/` — Supabase project config (`config.toml`) and Edge Functions (`functions/assistant/`).

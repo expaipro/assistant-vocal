@@ -1,7 +1,12 @@
 // Single entry point between the screens and the assistant "brain".
-// Today it returns canned butler-style replies. Later, replace the body of
-// `askAssistant` with the real call to Claude through Supabase — screens
-// only depend on this function's signature, so they won't need to change.
+// The brain lives server-side in the Supabase Edge Function "assistant"
+// (supabase/functions/assistant). Screens only depend on this function's
+// signature, so the server can change (e.g. real Claude call) without
+// touching them.
+
+import { FunctionsFetchError, FunctionsHttpError, FunctionsRelayError } from '@supabase/supabase-js';
+
+import { getSupabase } from '@/lib/supabase';
 
 export type ChatRole = 'user' | 'assistant';
 
@@ -11,37 +16,42 @@ export type ChatMessage = {
   text: string;
 };
 
-const FAKE_DELAY_MS = 1000;
-
-const FAKE_REPLIES = [
-  'Very good, sir. I have taken note of your request and shall attend to it at once.',
-  'An excellent question. Allow me a moment to consult the markets on your behalf.',
-  'Certainly. Might I suggest we review your open positions before the session closes?',
-  'Of course. Rest assured, I am keeping a watchful eye on volatility this morning.',
-  'Understood. I shall have a full briefing prepared for you shortly.',
-  'With pleasure. Shall I also set an alert, should the price reach your target?',
-];
-
-let lastReplyIndex = -1;
-
-function wait(ms: number) {
-  return new Promise<void>((resolve) => setTimeout(resolve, ms));
-}
-
-function pickReply() {
-  let index = Math.floor(Math.random() * FAKE_REPLIES.length);
-  if (index === lastReplyIndex) {
-    index = (index + 1) % FAKE_REPLIES.length;
-  }
-  lastReplyIndex = index;
-  return FAKE_REPLIES[index];
-}
+const REQUEST_TIMEOUT_MS = 15000;
 
 /**
  * Sends the user's message (plus the conversation so far) to the assistant
  * and resolves with the assistant's reply text.
+ * Throws when the server can't be reached or fails; the screen then shows
+ * its polite error message.
  */
 export async function askAssistant(message: string, history: ChatMessage[]): Promise<string> {
-  await wait(FAKE_DELAY_MS);
-  return pickReply();
+  const supabase = getSupabase();
+  if (!supabase) {
+    console.warn('Supabase is not configured: fill in .env (see .env.example).');
+    throw new Error('The assistant is not configured yet.');
+  }
+
+  const { data, error } = await supabase.functions.invoke<{ reply?: string }>('assistant', {
+    body: {
+      message,
+      history: history.map(({ role, text }) => ({ role, text })),
+    },
+    timeout: REQUEST_TIMEOUT_MS,
+  });
+
+  if (error) {
+    console.warn('Assistant request failed:', error);
+    if (error instanceof FunctionsFetchError || error instanceof FunctionsRelayError) {
+      throw new Error('The server is not responding. Please check your connection.');
+    }
+    if (error instanceof FunctionsHttpError) {
+      throw new Error('The server could not handle the request.');
+    }
+    throw new Error('The assistant is unavailable right now.');
+  }
+
+  if (!data?.reply) {
+    throw new Error('The server sent an empty reply.');
+  }
+  return data.reply;
 }
