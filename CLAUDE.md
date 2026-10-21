@@ -12,7 +12,7 @@ The owner is not a developer: explain changes in plain, simple language (in Fren
 - **Expo Go compatible packages only.** Never add a library that needs a custom native build / development build.
 - **Install packages with `npx expo install <package>`** (never `npm install` / `yarn add` directly) so versions match SDK 57.
 - **No API keys or secrets in the app code.** Any call needing a key must go through a backend/server later.
-- **All user-visible text in English** (labels, buttons, messages, statuses).
+- **App bilingue FR/EN, aucun texte visible écrit en dur, tout passe par les fichiers de traduction** (`src/i18n/en.ts`, `src/i18n/fr.ts`).
 - **No Marvel elements**: never use the name "Jarvis" or any Iron Man visuals, names or references.
 - Run `npx expo lint` and `npx tsc --noEmit` before declaring a task done.
 
@@ -22,13 +22,26 @@ The owner is not a developer: explain changes in plain, simple language (in Fren
   now generated **server-side** by the Supabase Edge Function `assistant`.
 - The mic button is visual only (no speech recognition yet).
 - **The assistant reads every reply aloud** (text-to-speech via `expo-speech`, built-in iOS voices).
+- **The app is bilingual French / English** (see "Languages" below).
+
+# Languages (i18n)
+
+- Texts live in `src/i18n/en.ts` (reference, defines the `Translations` type) and `src/i18n/fr.ts` (must have the same keys;
+  TypeScript flags any missing one). Components read them with `const { t, language, setLanguage } = useTranslation()`
+  from `@/i18n`. To add a text: add the key to both files, then use `t.section.key`.
+- First launch: phone language via `expo-localization` (`fr` if the phone is in French, `en` otherwise).
+- FR / EN button at the top right (next to the voice button); the choice is saved with AsyncStorage (key `app.language`).
+- The chosen language is sent to the server with every message (`language: "fr" | "en"`); the Edge Function answers in that
+  language (French: formal "vous", butler tone, gender-neutral). The voice uses a French (fr-FR) or English voice accordingly.
 
 # Voice (text-to-speech)
 
 - All speech goes through `src/services/voice.ts` (`speak`, `stopSpeaking`, `setVoiceEnabled`); screens read its state with
   `useVoice()` (`src/hooks/use-voice.ts`). To move to a premium voice later, change only `voice.ts`.
-- Voice choice: first calm English male voice found on the phone (Daniel, Arthur, Oliver, Aaron...), enhanced/premium
-  quality preferred; otherwise the default `en-GB` voice. Rate 0.9, pitch 0.95.
+- `speak(text, language)`: picks the first calm male voice found on the phone for that language, enhanced/premium quality
+  preferred — English: Daniel, Arthur, Oliver, Aaron...; French (fr-FR first): Thomas, Daniel, Nicolas — otherwise the
+  default `en-GB` / `fr-FR` voice. Rate 0.9, pitch 0.95.
+- Switching language stops the current speech.
 - Sending a new message (or tapping the mic) stops the current speech.
 - Mute button (top right) is remembered between launches with AsyncStorage (key `voice.enabled`).
 - While speaking, the mic ring switches to a fast back-and-forth "vibration" with a waveform icon (`MicButton` mode `speaking`),
@@ -44,7 +57,7 @@ Screen (src/app/index.tsx)
   -> Edge Function "assistant" supabase/functions/assistant/index.ts (Deno, runs on Supabase)
 ```
 
-- Request body: `{ message: string, history: { role, text }[] }`. Response: `{ reply: string }`, or `{ error }` with a 4xx status.
+- Request body: `{ message: string, history: { role, text }[], language: "fr" | "en" }` (unknown language -> English). Response: `{ reply: string }`, or `{ error }` with a 4xx status.
 - The function uses `withSupabase({ auth: "publishable" })` from `@supabase/server`, so it only accepts calls carrying the
   project's publishable key; `verify_jwt = false` in `supabase/config.toml` (publishable keys are not JWTs).
 - On failure (no network, server down, 15 s timeout, bad config), `askAssistant` throws and the screen shows a polite error bubble.
@@ -68,6 +81,7 @@ Screen (src/app/index.tsx)
 - `src/components/` — reusable components (`mic-button.tsx`, `message-bubble.tsx`, `thinking-indicator.tsx`).
 - `src/services/assistant.ts` — the app-side entry point to the assistant.
 - `src/services/voice.ts` — the assistant's spoken voice (text-to-speech).
+- `src/i18n/` — translations (`en.ts`, `fr.ts`) and `useTranslation()` (`index.ts`).
 - `src/hooks/use-voice.ts` — React hook exposing the voice state (muted, speaking).
 - `src/lib/supabase.ts` — Supabase client (no user sessions yet).
 - `src/constants/theme.ts` — HUD colors and spacing.

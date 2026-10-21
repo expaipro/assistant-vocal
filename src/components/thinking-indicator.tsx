@@ -9,8 +9,10 @@ import Animated, {
 } from 'react-native-reanimated';
 
 import { Colors, Spacing } from '@/constants/theme';
+import { useTranslation } from '@/i18n';
 
 export function ThinkingIndicator() {
+  const { t } = useTranslation();
   const glow = useSharedValue(0.35);
 
   useEffect(() => {
@@ -22,7 +24,7 @@ export function ThinkingIndicator() {
 
   return (
     <Animated.View style={[styles.bubble, animatedStyle]}>
-      <Text style={styles.text}>Thinking...</Text>
+      <Text style={styles.text}>{t.chat.thinking}</Text>
     </Animated.View>
   );
 }

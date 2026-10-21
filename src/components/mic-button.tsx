@@ -12,6 +12,7 @@ import Animated, {
 } from 'react-native-reanimated';
 
 import { Colors } from '@/constants/theme';
+import { useTranslation } from '@/i18n';
 
 export type MicMode = 'idle' | 'listening' | 'speaking';
 
@@ -26,6 +27,7 @@ type Props = {
 };
 
 export function MicButton({ mode, onPress, size = 64 }: Props) {
+  const { t } = useTranslation();
   const pulse = useSharedValue(0);
   // 1 while speaking: rings "vibrate" back and forth instead of expanding outward.
   const speaking = useSharedValue(0);
@@ -84,7 +86,7 @@ export function MicButton({ mode, onPress, size = 64 }: Props) {
       <Pressable
         onPress={onPress}
         accessibilityRole="button"
-        accessibilityLabel={listening ? 'Stop listening' : 'Start listening'}
+        accessibilityLabel={listening ? t.mic.stopListening : t.mic.startListening}
         style={({ pressed }) => [
           styles.button,
           buttonShape,

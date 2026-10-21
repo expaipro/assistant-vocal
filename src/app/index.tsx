@@ -18,6 +18,7 @@ import { MicButton } from '@/components/mic-button';
 import { ThinkingIndicator } from '@/components/thinking-indicator';
 import { Colors, Spacing } from '@/constants/theme';
 import { useVoice } from '@/hooks/use-voice';
+import { LANGUAGE_LABELS, useTranslation } from '@/i18n';
 import { askAssistant, type ChatMessage } from '@/services/assistant';
 import { setVoiceEnabled, speak, stopSpeaking } from '@/services/voice';
 
@@ -36,6 +37,7 @@ export default function ConversationScreen() {
   const [listening, setListening] = useState(false);
   const [keyboardVisible, setKeyboardVisible] = useState(false);
   const voice = useVoice();
+  const { t, language, setLanguage } = useTranslation();
 
   // The home-indicator gap is only needed when the keyboard is closed.
   useEffect(() => {
@@ -63,13 +65,13 @@ export default function ConversationScreen() {
     setThinking(true);
 
     try {
-      const reply = await askAssistant(text, history);
+      const reply = await askAssistant(text, history, language);
       setMessages((current) => [...current, makeMessage('assistant', reply)]);
-      void speak(reply);
+      void speak(reply, language);
     } catch {
-      const apology = "I'm terribly sorry, something went wrong. Please try again.";
+      const apology = t.chat.errorReply;
       setMessages((current) => [...current, makeMessage('assistant', apology)]);
-      void speak(apology);
+      void speak(apology, language);
     } finally {
       setThinking(false);
     }
@@ -83,27 +85,54 @@ export default function ConversationScreen() {
         style={styles.flex}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <View style={styles.header}>
-          <Pressable
-            onPress={() => setVoiceEnabled(!voice.enabled)}
-            accessibilityRole="button"
-            accessibilityLabel={voice.enabled ? 'Mute voice' : 'Unmute voice'}
-            hitSlop={12}
-            style={({ pressed }) => [styles.voiceToggle, pressed && styles.voiceTogglePressed]}>
-            <SymbolView
-              name={
-                voice.enabled
-                  ? { ios: 'speaker.wave.2.fill', android: 'volume_up', web: 'volume_up' }
-                  : { ios: 'speaker.slash.fill', android: 'volume_off', web: 'volume_off' }
-              }
-              tintColor={voice.enabled ? Colors.cyan : Colors.textMuted}
-              size={20}
-            />
-          </Pressable>
-          <Text style={styles.title}>ASSISTANT</Text>
-          <View style={styles.status}>
-            <View style={styles.statusDot} />
-            <Text style={styles.statusText}>Online</Text>
+          <View style={styles.topBar}>
+            <View style={styles.status}>
+              <View style={styles.statusDot} />
+              <Text style={styles.statusText}>{t.status.online}</Text>
+            </View>
+            <View style={styles.headerActions}>
+              <Pressable
+                onPress={() => {
+                  stopSpeaking();
+                  setLanguage(language === 'fr' ? 'en' : 'fr');
+                }}
+                accessibilityRole="button"
+                accessibilityLabel={t.language.switch}
+                hitSlop={8}
+                style={({ pressed }) => [styles.headerButton, pressed && styles.headerButtonPressed]}>
+                <Text style={styles.languageText}>
+                  <Text style={language === 'fr' ? styles.languageActive : undefined}>
+                    {LANGUAGE_LABELS.fr}
+                  </Text>
+                  <Text style={styles.languageSeparator}> / </Text>
+                  <Text style={language === 'en' ? styles.languageActive : undefined}>
+                    {LANGUAGE_LABELS.en}
+                  </Text>
+                </Text>
+              </Pressable>
+              <Pressable
+                onPress={() => setVoiceEnabled(!voice.enabled)}
+                accessibilityRole="button"
+                accessibilityLabel={voice.enabled ? t.voice.mute : t.voice.unmute}
+                hitSlop={8}
+                style={({ pressed }) => [
+                  styles.headerButton,
+                  styles.voiceToggle,
+                  pressed && styles.headerButtonPressed,
+                ]}>
+                <SymbolView
+                  name={
+                    voice.enabled
+                      ? { ios: 'speaker.wave.2.fill', android: 'volume_up', web: 'volume_up' }
+                      : { ios: 'speaker.slash.fill', android: 'volume_off', web: 'volume_off' }
+                  }
+                  tintColor={voice.enabled ? Colors.cyan : Colors.textMuted}
+                  size={20}
+                />
+              </Pressable>
+            </View>
           </View>
+          <Text style={styles.title}>{t.appName}</Text>
         </View>
 
         <FlatList
@@ -118,7 +147,7 @@ export default function ConversationScreen() {
           onContentSizeChange={scrollToEnd}
           onLayout={scrollToEnd}
           ListEmptyComponent={
-            <Text style={styles.emptyText}>Good day. How may I be of service?</Text>
+            <Text style={styles.emptyText}>{t.chat.emptyGreeting}</Text>
           }
           ListFooterComponent={thinking ? <ThinkingIndicator /> : null}
           ListFooterComponentStyle={styles.footer}
@@ -134,7 +163,7 @@ export default function ConversationScreen() {
               style={styles.input}
               value={draft}
               onChangeText={setDraft}
-              placeholder={listening ? 'Listening...' : 'Type a message'}
+              placeholder={listening ? t.chat.listening : t.chat.inputPlaceholder}
               placeholderTextColor={listening ? Colors.cyan : Colors.textMuted}
               selectionColor={Colors.cyan}
               keyboardAppearance="dark"
@@ -147,7 +176,7 @@ export default function ConversationScreen() {
               onPress={send}
               disabled={!canSend}
               accessibilityRole="button"
-              accessibilityLabel="Send message"
+              accessibilityLabel={t.chat.sendMessage}
               style={({ pressed }) => [
                 styles.sendButton,
                 !canSend && styles.sendButtonDisabled,
@@ -192,22 +221,45 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: Colors.cyanFaint,
   },
-  voiceToggle: {
-    position: 'absolute',
-    right: Spacing.md,
-    top: Spacing.md,
-    width: 40,
+  topBar: {
+    alignSelf: 'stretch',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: Spacing.md,
+  },
+  headerActions: {
+    flexDirection: 'row',
+    gap: Spacing.sm,
+  },
+  headerButton: {
     height: 40,
+    paddingHorizontal: 12,
     borderRadius: 20,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
     borderColor: Colors.cyanFaint,
     backgroundColor: Colors.surface,
-    zIndex: 1,
   },
-  voiceTogglePressed: {
+  voiceToggle: {
+    width: 40,
+    paddingHorizontal: 0,
+  },
+  headerButtonPressed: {
     transform: [{ scale: 0.92 }],
+  },
+  languageText: {
+    color: Colors.textMuted,
+    fontSize: 13,
+    fontWeight: '600',
+    letterSpacing: 1,
+  },
+  languageActive: {
+    color: Colors.cyan,
+  },
+  languageSeparator: {
+    color: Colors.cyanDim,
   },
   title: {
     color: Colors.cyan,

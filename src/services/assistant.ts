@@ -6,6 +6,7 @@
 
 import { FunctionsFetchError, FunctionsHttpError, FunctionsRelayError } from '@supabase/supabase-js';
 
+import type { Language } from '@/i18n';
 import { getSupabase } from '@/lib/supabase';
 
 export type ChatRole = 'user' | 'assistant';
@@ -19,12 +20,16 @@ export type ChatMessage = {
 const REQUEST_TIMEOUT_MS = 15000;
 
 /**
- * Sends the user's message (plus the conversation so far) to the assistant
- * and resolves with the assistant's reply text.
+ * Sends the user's message (plus the conversation so far and the chosen
+ * language) to the assistant and resolves with the assistant's reply text.
  * Throws when the server can't be reached or fails; the screen then shows
  * its polite error message.
  */
-export async function askAssistant(message: string, history: ChatMessage[]): Promise<string> {
+export async function askAssistant(
+  message: string,
+  history: ChatMessage[],
+  language: Language,
+): Promise<string> {
   const supabase = getSupabase();
   if (!supabase) {
     console.warn('Supabase is not configured: fill in .env (see .env.example).');
@@ -35,6 +40,7 @@ export async function askAssistant(message: string, history: ChatMessage[]): Pro
     body: {
       message,
       history: history.map(({ role, text }) => ({ role, text })),
+      language,
     },
     timeout: REQUEST_TIMEOUT_MS,
   });
